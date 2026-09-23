@@ -4,17 +4,22 @@
  * Es el único componente que habla con Supabase, usando la llave
  * service_role. El frontend nunca toca la base de datos directamente.
  *
- * Estado actual: esqueleto. Todavía no expone endpoints de negocio porque
- * la app sigue persistiendo en localStorage (ver README, "Qué falta").
- * Lo que ya está listo es el arranque, el CORS y el health check que
- * Render consulta para decidir si el despliegue quedó sano.
+ * Estado actual: todavía no expone endpoints de negocio porque la app
+ * sigue persistiendo en localStorage (ver README, "Qué falta"). Lo que ya
+ * está listo es el arranque, el CORS, el inicio de sesión (auth.js) y el
+ * health check que Render consulta para decidir si el despliegue quedó sano.
  */
 import express from 'express';
 import cors from 'cors';
 import { config, supabaseConfigurado } from './config.js';
 import { getSupabase } from './supabase.js';
+import { authRouter } from './auth.js';
 
 const app = express();
+
+// Render pone un proxy delante: sin esto, el límite de intentos de login
+// vería a todos los usuarios con la misma IP (la del proxy).
+app.set('trust proxy', 1);
 
 app.use(express.json());
 
@@ -56,6 +61,10 @@ app.get('/health', async (_req, res) => {
     return res.status(503).json({ ok: false, supabase: 'error' });
   }
 });
+
+// Inicio de sesión. Los endpoints de negocio que se agreguen deben usar
+// requireAuth (de auth.js), p. ej. app.get('/constancias', requireAuth, ...).
+app.use('/auth', authRouter);
 
 app.listen(config.port, () => {
   console.log(`API escuchando en el puerto ${config.port}`);

@@ -13,8 +13,8 @@ usuarios. Ver "Qué falta" más abajo para lo que hace falta para varios
 equipos en red.
 
 El repositorio ya está organizado como monorepo (`frontend/` + `api/` +
-`supabase/`) para poder alojar cada pieza por separado. La API todavía es un
-esqueleto: expone `/health` y nada más, porque la aplicación sigue
+`supabase/`) para poder alojar cada pieza por separado. La API por ahora
+expone `/health` y el inicio de sesión (`/auth/*`); los datos siguen
 persistiendo en el navegador.
 
 ## Arquitectura
@@ -49,10 +49,10 @@ esa llave ni habla con Supabase directamente.
 
 ### Estado actual
 
-La API es un esqueleto: solo tiene `GET /health`. El frontend sigue guardando
-todo en `localStorage` y **no le hace ninguna llamada**. La estructura existe
-para que la migración a base de datos sea agregar endpoints, no reorganizar
-el repositorio.
+La API tiene `GET /health` y el inicio de sesión (ver "Inicio de sesión"
+abajo). Fuera del login, el frontend sigue guardando todo en `localStorage`
+y **no le hace ninguna llamada**. La estructura existe para que la migración
+a base de datos sea agregar endpoints, no reorganizar el repositorio.
 
 Mientras `SUPABASE_URL` no esté configurada, `/health` responde
 `200 {"ok": true, "supabase": "no configurado"}`, para que el servicio pueda
@@ -60,15 +60,52 @@ desplegarse en Render antes de que exista el proyecto de Supabase. En cuanto
 se definan las variables, el check hace una consulta real y devuelve 503 si
 la base no contesta.
 
+### Inicio de sesión
+
+> **Por ahora no valida credenciales.** La pantalla de login se muestra,
+> pero entra con cualquier correo y contraseña, sin llamar a la API (la
+> pantalla lo avisa). La validación real se activa con
+> `VITE_AUTH_ENABLED=true` en el frontend (en Vercel o en
+> `frontend/.env.local`), una vez configurado Supabase en la API.
+
+Con el login activado, la app pide correo y contraseña antes de mostrar
+cualquier pantalla. Las cuentas son de **Supabase Auth**, pero el navegador
+nunca habla con Supabase: manda las credenciales a la API, que es la que las
+valida.
+
+```
+Navegador --POST /auth/login--> API --signInWithPassword--> Supabase Auth
+          <-- access + refresh token --
+Navegador --Authorization: Bearer <token>--> API (requireAuth valida el token)
+```
+
+| Endpoint             | Qué hace                                                                   |
+| -------------------- | -------------------------------------------------------------------------- |
+| `POST /auth/login`   | correo + contraseña → tokens. Máx. 10 intentos fallidos por IP cada 15 min |
+| `POST /auth/refresh` | renueva el access token (el frontend lo hace 1 min antes de que expire)    |
+| `GET /auth/me`       | usuario de la sesión actual                                                |
+| `POST /auth/logout`  | revoca la sesión en Supabase                                               |
+
+- **Alta de usuarios:** no hay registro público. Un administrador crea las
+  cuentas en el panel de Supabase (Authentication → Users → Add user →
+  "Create new user", con "Auto Confirm User" marcado). Conviene desactivar
+  el registro abierto en Authentication → Sign In / Providers → "Allow new
+  users to sign up".
+- **La sesión vive en `sessionStorage`**: se cierra sola al cerrar el
+  navegador, pensando en equipos compartidos de la Secretaría.
+- **Con el login activado pero sin `VITE_API_URL`** no se puede entrar: la
+  pantalla de login avisa que falta configurar el servidor.
+- **Endpoints nuevos:** todo endpoint con datos de alumnos debe usar el
+  middleware `requireAuth` de `api/src/auth.js`.
+
 ### Seguridad: lo que falta antes de producción con datos reales
 
-**El sistema no tiene autenticación.** Cualquiera con la URL del frontend
-puede generar constancias. Mientras el historial vivió en `localStorage` eso
-no exponía nada, pero en cuanto los datos de alumnos (nombre, matrícula,
-promedios) estén en una base compartida, hace falta login antes de exponer
-el sistema a internet. La arquitectura elegida (API con `service_role`, RLS
-cerrado) es la que permite agregarlo después sin rehacer nada, pero no lo
-sustituye.
+Mientras `VITE_AUTH_ENABLED` no sea `true`, el login no protege nada. Y aun
+activado, protege la interfaz, pero **mientras los datos sigan en
+`localStorage` la protección real es la del equipo**: el historial queda en
+ese navegador. La protección completa llega cuando los datos se muevan a la
+API y cada endpoint pase por `requireAuth`. Tampoco hay roles todavía:
+cualquier cuenta puede hacer todo.
 
 ## Poner a correr el proyecto
 
@@ -111,6 +148,11 @@ curl http://localhost:3000/health
 # {"ok":true,"supabase":"no configurado"}
 ```
 
+Para probar el login en local hacen falta `SUPABASE_URL` y
+`SUPABASE_SERVICE_ROLE_KEY` en `api/.env`, un usuario creado en Supabase, y
+`VITE_API_URL=http://localhost:3000` en `frontend/.env.local`. `FRONTEND_URL`
+debe coincidir con el puerto en el que corre Vite (por CORS).
+
 Con Docker:
 
 ```bash
@@ -135,6 +177,10 @@ Dentro de `frontend/`:
 frontend/src/
 ├── App.jsx                 # orquesta vista (Nueva/Historial), toast, historial
 ├── main.jsx                # punto de entrada de React
+├── Root.jsx                # pantalla de login hasta que hay sesión; después App
+├── lib/
+│   ├── api.js               # fetch a la API (VITE_API_URL) con el token de sesión
+│   └── session.js           # tokens de la sesión en sessionStorage
 ├── index.css                # design tokens + estilos (una hoja global, ver nota abajo)
 ├── constants/
 │   └── tipos.js             # TIPO_CONSTANCIA, VISTA, TIPO_POR_VISTA, TIPO_LABEL
@@ -154,6 +200,7 @@ frontend/src/
 │   ├── useHistorial.js       # historial + folio siguiente + anular/reactivar/descargas + import
 │   ├── useProgramas.js       # catálogo de programas, persistido en localStorage (sin panel de edición aún)
 │   ├── useCalendario.js      # calendario escolar (fechas + PDF oficial) y semestre vigente
+│   ├── useAuth.js            # login/logout contra la API, validación y renovación del token
 │   └── useToast.js           # mensaje transitorio
 ├── pdf/
 │   ├── ConstanciaPdfDocument.jsx  # documento @react-pdf/renderer (mismo texto y logos que la vista previa)
@@ -176,6 +223,7 @@ frontend/src/
     ├── InicioView.jsx             # panel de métricas (total, por tipo, últimas constancias)
     ├── NuevaConstanciaView.jsx
     ├── CalendarioView.jsx         # PDF oficial del calendario + fechas de cada semestre
+    ├── LoginView.jsx              # inicio de sesión (correo + contraseña)
     └── HistorialView.jsx          # + exportar/importar respaldo
 ```
 
@@ -206,10 +254,10 @@ sin ambigüedad, localizándolos por su etiqueta exacta:
   una advertencia en vez de asignar un programa al azar).
 - **Promedio general** y **fecha de consulta** (constancia de Promedio).
 - **Semestre cursado y su promedio**: se infiere como el último periodo
-  *regular* (no intersemestral) con calificaciones ya asentadas — es una
+  _regular_ (no intersemestral) con calificaciones ya asentadas — es una
   inferencia, no un dato literal del documento, así que queda marcada para
   verificar.
-- **Número de reinscripción**: los periodos *regulares* distintos del
+- **Número de reinscripción**: los periodos _regulares_ distintos del
   kárdex, contando el que está en curso aunque aún no tenga calificaciones,
   menos uno (el primero es la inscripción). Los intersemestrales no
   cuentan. También es un conteo, así que se debe verificar.
@@ -255,7 +303,8 @@ puede agregar cuando sí haga falta, sin tocar el resto del sistema.
 Estas quedaron abiertas en las reglas de negocio y aquí se resolvieron con un
 valor por default, marcado en la propia interfaz:
 
-- **Un solo rol de usuario** (sin login ni permisos todavía).
+- **Un solo rol de usuario**: hay login, pero todas las cuentas pueden hacer
+  lo mismo (sin permisos todavía).
 - **Folio consecutivo compartido** entre tipos de constancia, año fijo 2026
   (`useHistorial.js`).
 - **Catálogo de programas en `localStorage`** (`hooks/useProgramas.js`),
@@ -281,8 +330,8 @@ el panel de cada servicio.
 
 ### `frontend/` (se capturan en Vercel)
 
-| Variable | Para qué sirve | Ejemplo |
-| --- | --- | --- |
+| Variable       | Para qué sirve                      | Ejemplo                                    |
+| -------------- | ----------------------------------- | ------------------------------------------ |
 | `VITE_API_URL` | URL base de la API, sin barra final | `https://constancias-fci-api.onrender.com` |
 
 Todo lo que empieza con `VITE_` queda **incrustado en el bundle y es
@@ -290,18 +339,18 @@ público**. Por eso aquí no va ninguna llave de Supabase.
 
 ### `api/` (se capturan en Render)
 
-| Variable | Para qué sirve | Dónde sale |
-| --- | --- | --- |
-| `SUPABASE_URL` | URL del proyecto | Supabase > Project Settings > API > Project URL |
-| `SUPABASE_SERVICE_ROLE_KEY` | Llave secreta, salta RLS | Supabase > Project Settings > API > service_role |
-| `FRONTEND_URL` | Origen permitido por CORS, sin barra final | La URL que da Vercel |
-| `PORT` | Puerto de escucha | Render la inyecta sola; en local, 3000 |
-| `HEALTH_TABLE` | Tabla que consulta `/health` (opcional) | Por defecto `constancias` |
+| Variable                    | Para qué sirve                             | Dónde sale                                       |
+| --------------------------- | ------------------------------------------ | ------------------------------------------------ |
+| `SUPABASE_URL`              | URL del proyecto                           | Supabase > Project Settings > API > Project URL  |
+| `SUPABASE_SERVICE_ROLE_KEY` | Llave secreta, salta RLS                   | Supabase > Project Settings > API > service_role |
+| `FRONTEND_URL`              | Origen permitido por CORS, sin barra final | La URL que da Vercel                             |
+| `PORT`                      | Puerto de escucha                          | Render la inyecta sola; en local, 3000           |
+| `HEALTH_TABLE`              | Tabla que consulta `/health` (opcional)    | Por defecto `constancias`                        |
 
 ### GitHub Actions
 
-| Secret | Para qué sirve | Dónde sale |
-| --- | --- | --- |
+| Secret            | Para qué sirve                 | Dónde sale                                                       |
+| ----------------- | ------------------------------ | ---------------------------------------------------------------- |
 | `SUPABASE_DB_URL` | Respaldo semanal con `pg_dump` | Supabase > Project Settings > Database > Connection string > URI |
 
 ## Despliegue
@@ -323,8 +372,8 @@ URL que necesita Vercel.
 
 3. Confirmar en Authentication > Policies que las tablas aparecen con RLS
    habilitado.
-4. Copiar de Project Settings > API la *Project URL* y la llave
-   *service_role*.
+4. Copiar de Project Settings > API la _Project URL_ y la llave
+   _service_role_.
 
 ### 2. Render (API)
 
@@ -375,9 +424,9 @@ equipos de la Secretaría lo usen a la vez:
   cambiar los hooks `useHistorial`/`useProgramas` para que llamen a la API
   (con `frontend/src/lib/api.js`) en vez de a `localStorage`. El esquema
   propuesto ya resuelve el folio repetido con una secuencia de Postgres.
-- Autenticación (ver "Seguridad" en Arquitectura): hace falta **antes** de
-  exponer el sistema a internet con datos reales de alumnos.
-- Autenticación y roles, si se confirma que hará falta más de uno.
+- Proteger con `requireAuth` cada endpoint de datos que se agregue (el
+  login ya existe, ver "Inicio de sesión").
+- Roles y permisos, si se confirma que hará falta más de uno.
 - Guardar el PDF generado (o poder regenerarlo) en el backend, para
   auditoría, en vez de sólo regenerarlo al vuelo desde los datos guardados.
 - Catálogo de programas, anulaciones y calendario escolar compartidos entre

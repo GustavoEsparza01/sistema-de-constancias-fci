@@ -10,7 +10,7 @@ const TITLES = {
   [VISTA.CALENDARIO]: 'Calendario Escolar',
 };
 
-export default function TopBar({ view, historialCount, onSearch }) {
+export default function TopBar({ view, historialCount, onSearch, user, onLogout }) {
   const [query, setQuery] = useState('');
 
   function submit(e) {
@@ -51,8 +51,21 @@ export default function TopBar({ view, historialCount, onSearch }) {
           </div>
           <div className="flex flex-col items-end leading-none">
             <span className="font-semibold text-on-surface text-label-md">Secretaría Académica</span>
-            <span className="mt-1 text-on-surface-variant text-label-sm">Sesión única · sin login</span>
+            <span className="mt-1 text-on-surface-variant text-label-sm">
+              {user?.email ?? 'Sesión única · sin login'}
+            </span>
           </div>
+          {onLogout && (
+            <button
+              type="button"
+              onClick={onLogout}
+              title="Cerrar sesión"
+              aria-label="Cerrar sesión"
+              className="flex h-8 w-8 items-center justify-center rounded-full text-outline transition-colors hover:bg-surface-container-high hover:text-error"
+            >
+              <Icon name="logout" className="text-[18px]" />
+            </button>
+          )}
         </div>
       </div>
     </header>

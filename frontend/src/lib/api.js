@@ -1,12 +1,14 @@
 /**
- * Punto único para hablar con la API (servicio de Render). Hoy la app
- * todavía persiste en localStorage (ver utils/storage.js), así que nadie
- * llama a esto aún: existe para que, cuando se migre a la base de datos,
- * la URL salga de una variable de entorno y no quede escrita en el código.
+ * Punto único para hablar con la API (servicio de Render). Hoy solo lo usa
+ * el inicio de sesión (hooks/useAuth.js); los datos todavía persisten en
+ * localStorage (ver utils/storage.js) hasta que se migren a la base de
+ * datos. La URL sale de una variable de entorno, no del código.
  *
  * VITE_API_URL se define en Vercel (producción) y en frontend/.env.local
  * (desarrollo). Ver frontend/.env.example.
  */
+
+import { loadSession } from './session';
 
 const BASE_URL = import.meta.env.VITE_API_URL ?? '';
 
@@ -23,14 +25,36 @@ export function apiUrl(path) {
   return `${BASE_URL.replace(/\/$/, '')}/${String(path).replace(/^\//, '')}`;
 }
 
-/** fetch con JSON y manejo de error uniforme. */
+/** Error de la API, con el código HTTP para distinguir p. ej. 401 (sesión) de 503 (servidor). */
+export class ApiError extends Error {
+  constructor(message, status) {
+    super(message);
+    this.status = status;
+  }
+}
+
+/**
+ * fetch con JSON y manejo de error uniforme. Si hay sesión, manda el
+ * access token; el mensaje de error es el que devolvió la API, si lo hay.
+ */
 export async function apiFetch(path, options = {}) {
-  const response = await fetch(apiUrl(path), {
-    ...options,
-    headers: { 'Content-Type': 'application/json', ...options.headers },
-  });
+  const session = loadSession();
+  let response;
+  try {
+    response = await fetch(apiUrl(path), {
+      ...options,
+      headers: {
+        'Content-Type': 'application/json',
+        ...(session ? { Authorization: `Bearer ${session.accessToken}` } : {}),
+        ...options.headers,
+      },
+    });
+  } catch {
+    throw new ApiError('No se pudo conectar con el servidor. Revisa tu conexión.', 0);
+  }
   if (!response.ok) {
-    throw new Error(`La API respondió ${response.status} en ${path}`);
+    const body = await response.json().catch(() => null);
+    throw new ApiError(body?.error ?? `La API respondió ${response.status} en ${path}`, response.status);
   }
   return response.status === 204 ? null : response.json();
 }

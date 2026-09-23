@@ -13,7 +13,7 @@ import { useToast } from './hooks/useToast';
 import { VISTA, TIPO_POR_VISTA } from './constants/tipos';
 import { todayStr } from './utils/spanishText';
 
-export default function App() {
+export default function App({ user, onLogout }) {
   const [view, setView] = useState(VISTA.INICIO);
   const [prefill, setPrefill] = useState(null); // { tipo, data } al "duplicar para nueva emisión"
   const [historialQuery, setHistorialQuery] = useState('');
@@ -89,7 +89,13 @@ export default function App() {
     <div className="min-h-screen bg-background text-on-surface font-sans antialiased">
       <Sidebar view={view} onChangeView={changeView} />
       <div className="pl-gutter-sidebar">
-        <TopBar view={view} historialCount={historial.length} onSearch={handleSearchSubmit} />
+        <TopBar
+          view={view}
+          historialCount={historial.length}
+          onSearch={handleSearchSubmit}
+          user={user}
+          onLogout={onLogout}
+        />
         <main className="pt-16 min-h-screen">
           <div className="p-space-lg max-w-[1600px] mx-auto w-full">
             {view === VISTA.INICIO && (
