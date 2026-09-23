@@ -141,16 +141,19 @@ frontend/src/
 ├── data/
 │   ├── formFields.js         # config de campos por tipo (fuente de verdad del formulario)
 │   ├── programas.js          # semilla inicial del catálogo de programas (Regla P1)
+│   ├── calendarioInicial.js  # fechas del calendario escolar 2026-2027 (semestres y vacaciones)
 │   └── seedHistorial.js      # datos de ejemplo para no arrancar con historial vacío
 ├── utils/
 │   ├── spanishText.js        # números/fechas → texto en español (Reglas D1, D2, D3)
 │   ├── constanciaText.js     # texto legal de cada tipo, fuente única para preview y PDF
 │   ├── storage.js            # localStorage genérico (loadJSON/saveJSON), con try/catch
+│   ├── fileStore.js          # archivos (PDF del calendario) en IndexedDB
 │   ├── historialBackup.js    # exportar/importar el historial como archivo JSON
 │   └── validation.js         # isComplete(tipo, data)
 ├── hooks/
 │   ├── useHistorial.js       # historial + folio siguiente + anular/reactivar/descargas + import
 │   ├── useProgramas.js       # catálogo de programas, persistido en localStorage (sin panel de edición aún)
+│   ├── useCalendario.js      # calendario escolar (fechas + PDF oficial) y semestre vigente
 │   └── useToast.js           # mensaje transitorio
 ├── pdf/
 │   ├── ConstanciaPdfDocument.jsx  # documento @react-pdf/renderer (mismo texto y logos que la vista previa)
@@ -163,7 +166,7 @@ frontend/src/
 │   └── logo-fci.png          # logo de la FCI (recortado de una captura, ver nota abajo)
 ├── components/
 │   ├── atoms/                 # VarField.jsx (ámbar = dato vacío), Icon.jsx (Material Symbols)
-│   ├── form/                 # Field, inputs.jsx, FormPanel.jsx (dirigido por data/formFields.js)
+│   ├── form/                 # Field, inputs.jsx, FormPanel.jsx (dirigido por data/formFields.js), CalendarioPicker.jsx
 │   ├── document/             # DocumentShell (membrete con logos) + Runs + PreviewNormal + PreviewPromedio + PreviewDocument
 │   ├── history/               # HistorialTable.jsx, DocumentModal.jsx (con descarga real de PDF)
 │   ├── kardex/KardexUpload.jsx  # carga de kárdex PDF, precarga el formulario
@@ -172,6 +175,7 @@ frontend/src/
 └── views/
     ├── InicioView.jsx             # panel de métricas (total, por tipo, últimas constancias)
     ├── NuevaConstanciaView.jsx
+    ├── CalendarioView.jsx         # PDF oficial del calendario + fechas de cada semestre
     └── HistorialView.jsx          # + exportar/importar respaldo
 ```
 
@@ -205,10 +209,16 @@ sin ambigüedad, localizándolos por su etiqueta exacta:
   *regular* (no intersemestral) con calificaciones ya asentadas — es una
   inferencia, no un dato literal del documento, así que queda marcada para
   verificar.
+- **Número de reinscripción**: los periodos *regulares* distintos del
+  kárdex, contando el que está en curso aunque aún no tenga calificaciones,
+  menos uno (el primero es la inscripción). Los intersemestrales no
+  cuentan. También es un conteo, así que se debe verificar.
 
-**A propósito no se auto-completan** el número de reinscripción, los
-periodos de semestre/vacacional/reinscripción vigente, ni la fecha de
-expedición: el kárdex no los declara de forma explícita, y adivinarlos
+Los periodos de semestre y vacacional salen del calendario escolar (vista
+"Calendario Escolar"), no del kárdex.
+
+**A propósito no se auto-completa** la fecha de
+expedición: el kárdex no la declara de forma explícita, y adivinarla
 sería justo el tipo de error que esta función busca evitar. Todo campo que
 sí se completa automáticamente sigue siendo editable, para poder corregir
 cualquier dato mal leído antes de generar la constancia.
@@ -252,6 +262,10 @@ valor por default, marcado en la propia interfaz:
   sin panel de administración todavía (ver "Pantallas" arriba) — por
   navegador/equipo, no compartido.
 - **Historial en `localStorage`**, no en base de datos.
+- **Calendario escolar por navegador**: las fechas en `localStorage` y el
+  PDF oficial en IndexedDB (`hooks/useCalendario.js`), no compartidos entre
+  equipos. Las fechas se capturan a mano porque el calendario oficial es una
+  imagen sin texto legible.
 - **Logos del membrete en baja resolución** (`assets/logo-unacar.png`,
   `assets/logo-fci.png`): se recortaron de una captura de pantalla porque no
   había archivos de imagen aislados disponibles. Se ven bien en el tamaño
@@ -366,8 +380,9 @@ equipos de la Secretaría lo usen a la vez:
 - Autenticación y roles, si se confirma que hará falta más de uno.
 - Guardar el PDF generado (o poder regenerarlo) en el backend, para
   auditoría, en vez de sólo regenerarlo al vuelo desde los datos guardados.
-- Catálogo de programas y anulaciones compartidos entre equipos (hoy cada
-  navegador tiene su propia copia en localStorage).
+- Catálogo de programas, anulaciones y calendario escolar compartidos entre
+  equipos (hoy cada navegador tiene su propia copia en localStorage /
+  IndexedDB); el PDF del calendario iría a Supabase Storage.
 - Panel para administrar el catálogo de programas desde la interfaz (hoy
   solo se edita por código o por consola del navegador).
 

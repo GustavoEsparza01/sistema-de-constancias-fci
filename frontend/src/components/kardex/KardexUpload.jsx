@@ -7,6 +7,7 @@ const FIELD_LABELS = {
   matricula: 'Matrícula',
   alumno: 'Nombre del alumno',
   programa: 'Programa educativo',
+  reinscripcion: 'Número de reinscripción',
   fechaConsulta: 'Fecha de consulta',
   promedioGeneral: 'Promedio general',
   semestreCursado: 'Semestre cursado',

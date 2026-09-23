@@ -9,6 +9,7 @@ export const VISTA = {
   HISTORIAL: 'historial',
   NUEVA_NORMAL: 'nueva-normal',
   NUEVA_PROMEDIO: 'nueva-promedio',
+  CALENDARIO: 'calendario',
 };
 
 /** Tipo de constancia correspondiente a cada vista "Nueva", si aplica. */

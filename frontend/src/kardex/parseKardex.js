@@ -7,12 +7,12 @@ import { MESES } from '../utils/spanishText';
  *
  * Solo se auto-completan los datos que el documento declara sin ambigüedad
  * (matrícula, nombre, programa, generación, fecha de consulta, promedio
- * general). El número de reinscripción, los periodos de semestre/vacacional
- * y la fecha de expedición NO se infieren — el kárdex no los declara de
- * forma explícita, y adivinarlos sería justo el tipo de error que esta
- * función busca evitar. El semestre cursado y su promedio sí se infieren
- * (es el último periodo NORMAL con calificaciones), pero se marcan como
- * "verificar" porque es una inferencia, no un dato literal del documento.
+ * general). Los periodos de semestre/vacacional y la fecha de expedición
+ * NO se infieren — el kárdex no los declara (salen del calendario escolar,
+ * ver hooks/useCalendario.js). El número de reinscripción (periodos
+ * NORMALES menos uno) y el semestre cursado con su promedio (el último
+ * periodo NORMAL con calificaciones) sí se infieren, pero se deben
+ * verificar porque son un conteo, no un dato literal del documento.
  */
 
 const MESES_ABREV = ['ENE', 'FEB', 'MAR', 'ABR', 'MAY', 'JUN', 'JUL', 'AGO', 'SEP', 'OCT', 'NOV', 'DIC'];
@@ -109,6 +109,26 @@ function findUltimoSemestreCursado(text) {
 }
 
 /**
+ * Número de reinscripción: los periodos NORMALES distintos del kárdex
+ * (contando el que está en curso, aunque aún no tenga calificaciones)
+ * menos uno, porque el primero es la inscripción. Los intersemestrales no
+ * cuentan. Se cuentan los periodos que sí aparecen, en vez de restar
+ * contra la generación, para que una baja temporal no infle el número.
+ *
+ * Cada renglón de materia termina en "<PERIODO> [calificación] <TIPO>";
+ * la calificación falta en el periodo en curso ("AGO2026 NORMAL").
+ */
+function contarReinscripciones(text) {
+  const renglonRegex = /\b(INT\s+)?([A-Z]{3}\d{4})\s+(?:[A-Z0-9.]+\s+)?(NORMAL|INTERSEMESTRAL)\b/g;
+  const periodosNormales = new Set();
+  let m;
+  while ((m = renglonRegex.exec(text))) {
+    if (!m[1] && m[3] === 'NORMAL') periodosNormales.add(m[2]);
+  }
+  return periodosNormales.size - 1;
+}
+
+/**
  * @param {string} rawText texto extraído del PDF (ver extractPdfText.js)
  * @param {string[]} catalogoProgramas data/programas.js → PROGRAMAS
  * @returns {{ data: object, warnings: string[] }}
@@ -151,6 +171,10 @@ export function parseKardex(rawText, catalogoProgramas) {
   const promedioGeneralMatch = textNorm.match(/PROMEDIO GENERAL:\s*([\d.]+)/);
   if (promedioGeneralMatch) data.promedioGeneral = promedioGeneralMatch[1];
   else warnings.push('No se encontró el promedio general en el documento.');
+
+  const reinscripciones = contarReinscripciones(textNorm);
+  if (reinscripciones >= 1) data.reinscripcion = String(reinscripciones);
+  else warnings.push('No se pudo determinar el número de reinscripción; complétalo manualmente.');
 
   const ultimoSemestre = findUltimoSemestreCursado(textNorm);
   if (ultimoSemestre) {

@@ -38,7 +38,7 @@ export const FORM_FIELDS = {
       hint: (value) =>
         value ? `Se escribirá como "${ordinalWord(Number(value))}"` : 'Se convierte a texto automáticamente',
     },
-    { group: 'Periodo' },
+    { group: 'Periodo', calendario: true },
     {
       name: 'periodo',
       label: 'Periodo del semestre',
@@ -125,7 +125,7 @@ export const FORM_FIELDS = {
       step: '0.01',
       required: true,
     },
-    { group: 'Periodo y expedición' },
+    { group: 'Periodo y expedición', calendario: true },
     {
       name: 'periodo',
       label: 'Periodo de reinscripción',

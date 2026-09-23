@@ -4,6 +4,7 @@ import { isComplete } from '../../utils/validation';
 import Field from './Field';
 import Icon from '../atoms/Icon';
 import KardexUpload from '../kardex/KardexUpload';
+import CalendarioPicker from './CalendarioPicker';
 import { TextInput, NumberInput, SelectInput, DateInput, DateRangeInput } from './inputs';
 
 const TITLES = {
@@ -53,7 +54,7 @@ function groupFields(fields) {
   let current = null;
   for (const field of fields) {
     if (field.group) {
-      current = { title: field.group, fields: [] };
+      current = { title: field.group, calendario: field.calendario, fields: [] };
       groups.push(current);
     } else if (current) {
       current.fields.push(field);
@@ -67,7 +68,7 @@ function groupFields(fields) {
  * Agregar o modificar un campo es cuestión de editar esa configuración,
  * no este componente.
  */
-export default function FormPanel({ tipo, data, onChange, nextFolio, onGenerate, programas }) {
+export default function FormPanel({ tipo, data, onChange, nextFolio, onGenerate, programas, calendario }) {
   const fields = FORM_FIELDS[tipo] || [];
   const groups = groupFields(fields);
   const setValue = (key) => (value) => onChange({ ...data, [key]: value });
@@ -106,6 +107,14 @@ export default function FormPanel({ tipo, data, onChange, nextFolio, onGenerate,
               <Icon name="tune" className="text-[16px] text-secondary" />
               {group.title}
             </span>
+            {group.calendario && (
+              <CalendarioPicker
+                tipo={tipo}
+                calendario={calendario}
+                data={data}
+                onPick={(periodos) => onChange({ ...data, ...periodos })}
+              />
+            )}
             {group.fields.map((field) => (
               <Field
                 key={field.name}

@@ -7,6 +7,7 @@ const TITLES = {
   [VISTA.HISTORIAL]: 'Historial de Constancias',
   [VISTA.NUEVA_NORMAL]: 'Emisión de Constancia de Reinscripción',
   [VISTA.NUEVA_PROMEDIO]: 'Emisión de Constancia de Promedio',
+  [VISTA.CALENDARIO]: 'Calendario Escolar',
 };
 
 export default function TopBar({ view, historialCount, onSearch }) {
