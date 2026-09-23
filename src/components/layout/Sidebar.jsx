@@ -6,6 +6,7 @@ const NAV_ITEMS = [
   { view: VISTA.HISTORIAL, label: 'Historial de Constancias', icon: 'dataset' },
   { view: VISTA.NUEVA_NORMAL, label: 'Nueva: Reinscripción', icon: 'assignment_turned_in' },
   { view: VISTA.NUEVA_PROMEDIO, label: 'Nueva: Promedio', icon: 'grade' },
+  { view: VISTA.CALENDARIO, label: 'Calendario Escolar', icon: 'calendar_month' },
 ];
 
 const SOON_ITEMS = [

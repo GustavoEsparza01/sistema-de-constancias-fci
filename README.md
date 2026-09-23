@@ -109,10 +109,16 @@ sin ambigüedad, localizándolos por su etiqueta exacta:
   *regular* (no intersemestral) con calificaciones ya asentadas — es una
   inferencia, no un dato literal del documento, así que queda marcada para
   verificar.
+- **Número de reinscripción**: los periodos *regulares* distintos del
+  kárdex, contando el que está en curso aunque aún no tenga calificaciones,
+  menos uno (el primero es la inscripción). Los intersemestrales no
+  cuentan. También es un conteo, así que se debe verificar.
 
-**A propósito no se auto-completan** el número de reinscripción, los
-periodos de semestre/vacacional/reinscripción vigente, ni la fecha de
-expedición: el kárdex no los declara de forma explícita, y adivinarlos
+Los periodos de semestre y vacacional salen del calendario escolar (vista
+"Calendario Escolar"), no del kárdex.
+
+**A propósito no se auto-completa** la fecha de
+expedición: el kárdex no la declara de forma explícita, y adivinarla
 sería justo el tipo de error que esta función busca evitar. Todo campo que
 sí se completa automáticamente sigue siendo editable, para poder corregir
 cualquier dato mal leído antes de generar la constancia.

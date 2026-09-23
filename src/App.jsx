@@ -5,8 +5,10 @@ import Toast from './components/Toast';
 import InicioView from './views/InicioView';
 import NuevaConstanciaView from './views/NuevaConstanciaView';
 import HistorialView from './views/HistorialView';
+import CalendarioView from './views/CalendarioView';
 import { useHistorial } from './hooks/useHistorial';
 import { useProgramas } from './hooks/useProgramas';
+import { useCalendario } from './hooks/useCalendario';
 import { useToast } from './hooks/useToast';
 import { VISTA, TIPO_POR_VISTA } from './constants/tipos';
 import { todayStr } from './utils/spanishText';
@@ -25,6 +27,7 @@ export default function App() {
     importarHistorial,
   } = useHistorial();
   const { programas } = useProgramas();
+  const { calendario, guardarCalendario, pdfUrl: calendarioPdfUrl, subirPdf } = useCalendario();
   const { message, showToast } = useToast();
 
   function changeView(nextView) {
@@ -112,6 +115,16 @@ export default function App() {
                 initialData={prefill?.tipo === tipoActual ? prefill.data : null}
                 onGenerate={handleGenerate}
                 programas={programas}
+                calendario={calendario}
+              />
+            )}
+            {view === VISTA.CALENDARIO && (
+              <CalendarioView
+                calendario={calendario}
+                onGuardar={guardarCalendario}
+                pdfUrl={calendarioPdfUrl}
+                onSubirPdf={subirPdf}
+                showToast={showToast}
               />
             )}
           </div>

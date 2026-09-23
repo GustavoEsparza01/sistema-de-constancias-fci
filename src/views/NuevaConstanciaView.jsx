@@ -4,13 +4,29 @@ import PreviewDocument from '../components/document/PreviewDocument';
 import Icon from '../components/atoms/Icon';
 import { TIPO_CONSTANCIA, TIPO_LABEL } from '../constants/tipos';
 import { todayStr } from '../utils/spanishText';
+import { semestreParaFecha, periodosDeSemestre } from '../hooks/useCalendario';
+import { requiredKeys } from '../data/formFields';
 
-function initialState(initialData) {
-  return initialData ?? { fechaExpedicion: todayStr(), fechaConsulta: todayStr() };
+/** Una constancia nueva arranca con los periodos del semestre vigente según el calendario escolar. */
+function initialState(tipo, initialData, calendario) {
+  if (initialData) return initialData;
+  const semestre = semestreParaFecha(calendario, todayStr());
+  return {
+    ...(semestre ? periodosDeSemestre(requiredKeys(tipo), semestre) : {}),
+    fechaExpedicion: todayStr(),
+    fechaConsulta: todayStr(),
+  };
 }
 
-export default function NuevaConstanciaView({ tipo, nextFolio, initialData, onGenerate, programas }) {
-  const [data, setData] = useState(() => initialState(initialData));
+export default function NuevaConstanciaView({
+  tipo,
+  nextFolio,
+  initialData,
+  onGenerate,
+  programas,
+  calendario,
+}) {
+  const [data, setData] = useState(() => initialState(tipo, initialData, calendario));
 
   function handleGenerate() {
     onGenerate({ tipo, data });
@@ -28,6 +44,7 @@ export default function NuevaConstanciaView({ tipo, nextFolio, initialData, onGe
           nextFolio={nextFolio}
           onGenerate={handleGenerate}
           programas={programas}
+          calendario={calendario}
         />
       </section>
       <section className="lg:col-span-7 sticky top-20 flex flex-col gap-space-sm">
