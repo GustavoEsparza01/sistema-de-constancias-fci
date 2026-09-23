@@ -12,18 +12,80 @@ Por ahora corre completamente en el navegador: el historial vive en
 usuarios. Ver "Qué falta" más abajo para lo que hace falta para varios
 equipos en red.
 
+El repositorio ya está organizado como monorepo (`frontend/` + `api/` +
+`supabase/`) para poder alojar cada pieza por separado. La API todavía es un
+esqueleto: expone `/health` y nada más, porque la aplicación sigue
+persistiendo en el navegador.
+
+## Arquitectura
+
+Tres piezas desplegadas por separado. La regla que las ordena: **solo la API
+toca la base de datos**, con la llave `service_role`; el navegador nunca ve
+esa llave ni habla con Supabase directamente.
+
+```
+   Navegador
+       |
+       |  HTTPS
+       v
++------------------+         +------------------+        +------------------+
+|  frontend/       |  fetch  |  api/            |   pg   |  Supabase        |
+|  React 19 + Vite | ------> |  Node 20+Express | -----> |  PostgreSQL      |
+|                  |         |                  |        |                  |
+|  Vercel          |         |  Render (Docker) |        |  RLS activo,     |
+|  VITE_API_URL    |         | SERVICE_ROLE_KEY |        |  sin políticas   |
++------------------+         +------------------+        +------------------+
+      público                   CORS restringido              cerrado al
+                                a FRONTEND_URL                navegador
+```
+
+- **`frontend/`** — la aplicación React + Vite. Es lo único público. No
+  contiene ninguna llave de Supabase, ni la `anon` ni la `service_role`.
+- **`api/`** — Express en un contenedor Docker. Único componente con la
+  llave `service_role`. CORS restringido al origen del frontend.
+- **`supabase/migrations/`** — el esquema en SQL. RLS habilitado en todas
+  las tablas y sin políticas, así que la base queda cerrada a cualquiera que
+  no sea la API.
+
+### Estado actual
+
+La API es un esqueleto: solo tiene `GET /health`. El frontend sigue guardando
+todo en `localStorage` y **no le hace ninguna llamada**. La estructura existe
+para que la migración a base de datos sea agregar endpoints, no reorganizar
+el repositorio.
+
+Mientras `SUPABASE_URL` no esté configurada, `/health` responde
+`200 {"ok": true, "supabase": "no configurado"}`, para que el servicio pueda
+desplegarse en Render antes de que exista el proyecto de Supabase. En cuanto
+se definan las variables, el check hace una consulta real y devuelve 503 si
+la base no contesta.
+
+### Seguridad: lo que falta antes de producción con datos reales
+
+**El sistema no tiene autenticación.** Cualquiera con la URL del frontend
+puede generar constancias. Mientras el historial vivió en `localStorage` eso
+no exponía nada, pero en cuanto los datos de alumnos (nombre, matrícula,
+promedios) estén en una base compartida, hace falta login antes de exponer
+el sistema a internet. La arquitectura elegida (API con `service_role`, RLS
+cerrado) es la que permite agregarlo después sin rehacer nada, pero no lo
+sustituye.
+
 ## Poner a correr el proyecto
 
-Requiere Node 18+.
+Requiere Node 20+.
+
+### Frontend
 
 ```bash
+cd frontend
 npm install
+cp .env.example .env.local   # opcional mientras no haya API
 npm run dev
 ```
 
 Abre la URL que imprime Vite (normalmente `http://localhost:5173`).
 
-Otros comandos:
+Otros comandos, todos desde `frontend/`:
 
 ```bash
 npm run build         # build de producción a dist/
@@ -33,10 +95,44 @@ npm run format        # prettier --write
 npm run format:check  # prettier --check
 ```
 
+### API
+
+```bash
+cd api
+npm install
+cp .env.example .env    # se puede dejar vacío: arranca sin Supabase
+npm run dev             # node --watch, escucha en http://localhost:3000
+```
+
+Comprobar que responde:
+
+```bash
+curl http://localhost:3000/health
+# {"ok":true,"supabase":"no configurado"}
+```
+
+Con Docker:
+
+```bash
+docker build -t constancias-api ./api
+docker run --rm -p 3000:3000 --env-file api/.env constancias-api
+```
+
 ## Estructura del proyecto
 
 ```
-src/
+.
+├── frontend/              # aplicación React + Vite → Vercel
+├── api/                   # API Express en Docker → Render
+├── supabase/migrations/   # esquema de la base de datos en SQL
+├── .github/workflows/     # CI y respaldo semanal
+└── render.yaml            # Blueprint de Render
+```
+
+Dentro de `frontend/`:
+
+```
+frontend/src/
 ├── App.jsx                 # orquesta vista (Nueva/Historial), toast, historial
 ├── main.jsx                # punto de entrada de React
 ├── index.css                # design tokens + estilos (una hoja global, ver nota abajo)
@@ -163,6 +259,92 @@ valor por default, marcado en la propia interfaz:
   (del sitio de UNACAR o del manual de identidad) en mejor resolución, basta
   con reemplazar esos dos archivos — el resto del código no cambia.
 
+## Variables de entorno
+
+Ningún valor real se guarda en el repositorio. Cada carpeta trae un
+`.env.example` con los nombres y sin los valores; los reales se capturan en
+el panel de cada servicio.
+
+### `frontend/` (se capturan en Vercel)
+
+| Variable | Para qué sirve | Ejemplo |
+| --- | --- | --- |
+| `VITE_API_URL` | URL base de la API, sin barra final | `https://constancias-fci-api.onrender.com` |
+
+Todo lo que empieza con `VITE_` queda **incrustado en el bundle y es
+público**. Por eso aquí no va ninguna llave de Supabase.
+
+### `api/` (se capturan en Render)
+
+| Variable | Para qué sirve | Dónde sale |
+| --- | --- | --- |
+| `SUPABASE_URL` | URL del proyecto | Supabase > Project Settings > API > Project URL |
+| `SUPABASE_SERVICE_ROLE_KEY` | Llave secreta, salta RLS | Supabase > Project Settings > API > service_role |
+| `FRONTEND_URL` | Origen permitido por CORS, sin barra final | La URL que da Vercel |
+| `PORT` | Puerto de escucha | Render la inyecta sola; en local, 3000 |
+| `HEALTH_TABLE` | Tabla que consulta `/health` (opcional) | Por defecto `constancias` |
+
+### GitHub Actions
+
+| Secret | Para qué sirve | Dónde sale |
+| --- | --- | --- |
+| `SUPABASE_DB_URL` | Respaldo semanal con `pg_dump` | Supabase > Project Settings > Database > Connection string > URI |
+
+## Despliegue
+
+El orden importa: Supabase da las llaves que necesita Render, y Render da la
+URL que necesita Vercel.
+
+### 1. Supabase
+
+1. Crear el proyecto en [supabase.com](https://supabase.com).
+2. Aplicar el esquema. Revisar primero
+   `supabase/migrations/20260923000000_esquema_inicial.sql`, que es una
+   propuesta inferida (ver `supabase/README.md`):
+
+   ```bash
+   npx supabase link --project-ref <tu-project-ref>
+   npx supabase db push
+   ```
+
+3. Confirmar en Authentication > Policies que las tablas aparecen con RLS
+   habilitado.
+4. Copiar de Project Settings > API la *Project URL* y la llave
+   *service_role*.
+
+### 2. Render (API)
+
+1. New > Blueprint y apuntar al repositorio. Render lee `render.yaml` y
+   detecta el servicio Docker con `rootDir: api`.
+2. Capturar a mano las variables, que vienen con `sync: false`:
+   `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` y `FRONTEND_URL`.
+   `PORT` no se captura: Render la inyecta.
+3. `FRONTEND_URL` todavía no se conoce en este punto. Se puede dejar
+   `http://localhost:5173` y corregirla después del paso 3.
+4. Esperar a que el health check de `/health` pase en verde y anotar la URL
+   del servicio.
+
+### 3. Vercel (frontend)
+
+1. Add New > Project y apuntar al mismo repositorio.
+2. **Root Directory: `frontend`** — es el ajuste que más se olvida. Sin él,
+   Vercel busca el `package.json` en la raíz y el build falla.
+3. Framework Preset: Vite. El build (`npm run build`) y el directorio de
+   salida (`dist`) se detectan solos.
+4. Capturar `VITE_API_URL` con la URL de Render del paso 2.
+5. Desplegar y anotar la URL que asigna Vercel.
+
+### 4. Cerrar el círculo
+
+Volver a Render y poner en `FRONTEND_URL` la URL real de Vercel. Si no, CORS
+bloquea las llamadas del navegador. Render redespliega solo al guardar.
+
+### 5. Respaldos
+
+En GitHub, Settings > Secrets and variables > Actions, agregar el secret
+`SUPABASE_DB_URL`. El respaldo corre los domingos a las 06:00 UTC y también
+se puede lanzar a mano desde la pestaña Actions.
+
 ## Qué falta para el sistema completo
 
 Ya resuelto: la generación real del PDF (`@react-pdf/renderer`, mismo texto
@@ -174,6 +356,13 @@ equipos de la Secretaría lo usen a la vez:
   folio consecutivo viven en `localStorage`, es decir, por navegador/equipo,
   no compartido entre usuarios. Sin esto, dos personas generando constancias
   al mismo tiempo pueden repetir folio.
+  **La estructura ya está lista** (`api/` con Express y Docker, `supabase/`
+  con el esquema propuesto, `render.yaml`): falta escribir los endpoints y
+  cambiar los hooks `useHistorial`/`useProgramas` para que llamen a la API
+  (con `frontend/src/lib/api.js`) en vez de a `localStorage`. El esquema
+  propuesto ya resuelve el folio repetido con una secuencia de Postgres.
+- Autenticación (ver "Seguridad" en Arquitectura): hace falta **antes** de
+  exponer el sistema a internet con datos reales de alumnos.
 - Autenticación y roles, si se confirma que hará falta más de uno.
 - Guardar el PDF generado (o poder regenerarlo) en el backend, para
   auditoría, en vez de sólo regenerarlo al vuelo desde los datos guardados.

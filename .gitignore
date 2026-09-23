@@ -7,10 +7,23 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
+# Dependencias y builds (en cualquier carpeta: frontend/, api/)
 node_modules
 dist
 dist-ssr
 *.local
+
+# Variables de entorno — NUNCA se suben.
+# El patrón .env.* cubre también .env.production, .env.development, etc.,
+# que las convenciones más estrechas (.env.local, .env.*.local) dejan fuera.
+# La excepción son los .env.example: solo traen nombres, sin valores.
+.env
+.env.*
+!.env.example
+
+# Respaldos de base de datos generados en local
+*.dump
+*.sql.gz
 
 # Editor directories and files
 .vscode/*

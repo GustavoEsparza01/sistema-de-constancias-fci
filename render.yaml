@@ -1,0 +1,25 @@
+# Blueprint de Render — https://render.com/docs/blueprint-spec
+#
+# Despliega la API (y solo la API) como contenedor Docker. El frontend vive
+# en Vercel y la base de datos en Supabase; ninguno de los dos se declara aquí.
+#
+# Las variables van con sync: false, es decir, Render NO las toma de este
+# archivo: hay que capturarlas a mano en el panel del servicio. Así la llave
+# service_role nunca queda escrita en el repositorio.
+services:
+  - type: web
+    name: constancias-fci-api
+    runtime: docker
+    rootDir: api
+    dockerfilePath: ./Dockerfile
+    plan: free
+    region: oregon
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: FRONTEND_URL
+        sync: false
