@@ -87,7 +87,7 @@ export default function App({ user, onLogout }) {
 
   return (
     <div className="min-h-screen bg-background text-on-surface font-sans antialiased">
-      <Sidebar view={view} onChangeView={changeView} />
+      <Sidebar view={view} onChangeView={changeView} user={user} onLogout={onLogout} />
       <div className="pl-gutter-sidebar">
         <TopBar
           view={view}

@@ -14,7 +14,7 @@ const SOON_ITEMS = [
   { label: 'Configuración de Plantillas', icon: 'draw' },
 ];
 
-export default function Sidebar({ view, onChangeView }) {
+export default function Sidebar({ view, onChangeView, user, onLogout }) {
   return (
     <aside className="fixed left-0 top-0 z-50 flex h-full w-gutter-sidebar flex-col justify-between bg-primary-container shadow-[0_1px_8px_rgba(0,0,0,0.08)]">
       <div className="flex flex-col">
@@ -73,16 +73,29 @@ export default function Sidebar({ view, onChangeView }) {
         </nav>
       </div>
 
-      <div className="p-space-md">
+      <div className="flex flex-col gap-space-xs p-space-md">
         <div className="flex items-center gap-space-xs text-on-primary-container text-label-sm">
-          <div className="flex h-7 w-7 items-center justify-center rounded-full bg-white/10 font-bold text-on-primary text-label-sm">
+          <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-white/10 font-bold text-on-primary text-label-sm">
             SA
           </div>
-          <div className="leading-tight">
+          <div className="min-w-0 leading-tight">
             <div>Secretaría Académica</div>
-            <div className="opacity-70">FCI · UNACAR</div>
+            <div className="truncate opacity-70" title={user?.email}>
+              {user?.email ?? 'FCI · UNACAR'}
+            </div>
           </div>
         </div>
+
+        {onLogout && (
+          <button
+            type="button"
+            onClick={onLogout}
+            className="flex items-center gap-space-sm rounded px-space-sm py-space-xs text-left text-on-primary-container text-body-md transition-colors hover:bg-white/10 hover:text-on-primary"
+          >
+            <Icon name="logout" className="text-[18px]" />
+            <span>Cerrar sesión</span>
+          </button>
+        )}
       </div>
     </aside>
   );
