@@ -64,7 +64,10 @@ la base no contesta.
 
 > **Por ahora no valida credenciales.** La pantalla de login se muestra,
 > pero entra con cualquier correo y contraseña, sin llamar a la API (la
-> pantalla lo avisa). La validación real se activa con
+> pantalla lo avisa). "Crear o cambiar mi contraseña" también se simula:
+> no manda ningún correo, la pantalla indica el código de prueba
+> (`123456`) y la contraseña no se guarda. Sirve para revisar las
+> pantallas en Vercel sin Supabase. La validación real se activa con
 > `VITE_AUTH_ENABLED=true` en el frontend (en Vercel o en
 > `frontend/.env.local`), una vez configurado Supabase en la API.
 

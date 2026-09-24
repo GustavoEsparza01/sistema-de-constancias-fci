@@ -19,6 +19,16 @@ export const AUTH = {
  */
 export const AUTH_ACTIVADA = import.meta.env.VITE_AUTH_ENABLED === 'true';
 
+/**
+ * Con el login apagado, "Crear o cambiar mi contraseña" también se simula
+ * para poder mostrar las pantallas sin Supabase: no se manda ningún correo,
+ * la pantalla indica este código y la contraseña no se guarda en ningún lado.
+ */
+const CODIGO_DEMO = '123456';
+
+/** Pausa breve para que el modo demostración se sienta como una llamada real. */
+const esperaDemo = () => new Promise((resolve) => setTimeout(resolve, 600));
+
 function estadoInicial() {
   if (!AUTH_ACTIVADA) {
     const session = loadSession();
@@ -90,14 +100,16 @@ export function useAuth() {
     return () => clearTimeout(timer);
   }, [state]);
 
+  /** Sin validación (modo demostración): entra con el correo tal cual, sin llamar a la API. */
+  function entrarSinValidar(email) {
+    const user = { email: email.trim() };
+    saveSession({ sinValidar: true, user });
+    setState({ status: AUTH.AUTHED, user });
+  }
+
   /** Lanza ApiError con el mensaje para mostrar si las credenciales no sirven. */
   async function login(email, password) {
-    if (!AUTH_ACTIVADA) {
-      const user = { email: email.trim() };
-      saveSession({ sinValidar: true, user });
-      setState({ status: AUTH.AUTHED, user });
-      return;
-    }
+    if (!AUTH_ACTIVADA) return entrarSinValidar(email);
     const session = await apiFetch('/auth/login', {
       method: 'POST',
       body: JSON.stringify({ email, password }),
@@ -107,12 +119,23 @@ export function useAuth() {
   }
 
   /** Pide a la API que mande un código al correo. Devuelve { mensaje } para mostrar. */
-  function pedirCodigo(email) {
+  async function pedirCodigo(email) {
+    if (!AUTH_ACTIVADA) {
+      await esperaDemo();
+      return {
+        mensaje: `Modo demostración: no se envía ningún correo. Usa el código ${CODIGO_DEMO}.`,
+      };
+    }
     return apiFetch('/auth/codigo', { method: 'POST', body: JSON.stringify({ email }) });
   }
 
   /** Verifica el código, guarda la contraseña nueva y deja la sesión iniciada. */
   async function crearPassword(email, codigo, password) {
+    if (!AUTH_ACTIVADA) {
+      await esperaDemo();
+      if (codigo !== CODIGO_DEMO) throw new Error('El código no es válido o ya expiró. Pide uno nuevo.');
+      return entrarSinValidar(email);
+    }
     const session = await apiFetch('/auth/crear-password', {
       method: 'POST',
       body: JSON.stringify({ email, codigo, password }),

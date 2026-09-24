@@ -56,7 +56,8 @@ export default function LoginView({
         {!activada && (
           <p className="flex items-start gap-space-2xs rounded-lg bg-surface-container p-space-sm text-on-surface-variant text-label-sm">
             <Icon name="info" className="mt-0.5 text-[16px] text-secondary" />
-            Autenticación en preparación: por ahora se entra con cualquier correo y contraseña.
+            Modo demostración: se entra con cualquier correo y contraseña, y la creación de contraseña es
+            simulada.
           </p>
         )}
 
@@ -114,8 +115,8 @@ export default function LoginView({
               </button>
             </form>
 
-            {/* Sin la API activada no hay a dónde mandar el código. */}
-            {activada && configurada && (
+            {/* Con el login apagado, el flujo se simula (ver CODIGO_DEMO en useAuth). */}
+            {configurada && (
               <div className="flex flex-col items-center gap-space-2xs text-center text-label-sm">
                 <span className="text-on-surface-variant">¿Es tu primera vez o olvidaste tu contraseña?</span>
                 <button
