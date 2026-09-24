@@ -60,7 +60,8 @@ export function useAuth() {
         const { user } = await apiFetch('/auth/me');
         if (!cancelled) setState({ status: AUTH.AUTHED, user });
       } catch (error) {
-        if (error.status === 401) clearSession();
+        // 403: la sesión es válida pero el correo ya no está autorizado.
+        if (error.status === 401 || error.status === 403) clearSession();
         if (!cancelled) setState({ status: AUTH.ANON, user: null, error: error.message });
       }
     })();
@@ -105,6 +106,21 @@ export function useAuth() {
     setState({ status: AUTH.AUTHED, user: session.user });
   }
 
+  /** Pide a la API que mande un código al correo. Devuelve { mensaje } para mostrar. */
+  function pedirCodigo(email) {
+    return apiFetch('/auth/codigo', { method: 'POST', body: JSON.stringify({ email }) });
+  }
+
+  /** Verifica el código, guarda la contraseña nueva y deja la sesión iniciada. */
+  async function crearPassword(email, codigo, password) {
+    const session = await apiFetch('/auth/crear-password', {
+      method: 'POST',
+      body: JSON.stringify({ email, codigo, password }),
+    });
+    saveSession(session);
+    setState({ status: AUTH.AUTHED, user: session.user });
+  }
+
   async function logout() {
     if (AUTH_ACTIVADA) await cerrarEnApi();
     clearSession();
@@ -127,6 +143,8 @@ export function useAuth() {
     configurada: !AUTH_ACTIVADA || apiConfigurada(),
     activada: AUTH_ACTIVADA,
     login,
+    pedirCodigo,
+    crearPassword,
     logout,
   };
 }

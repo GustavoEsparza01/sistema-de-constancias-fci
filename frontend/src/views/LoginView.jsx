@@ -1,20 +1,27 @@
 import { useState } from 'react';
 import Icon from '../components/atoms/Icon';
+import PasswordInput, { inputClass } from '../components/auth/PasswordInput';
+import CrearPasswordForm from '../components/auth/CrearPasswordForm';
 import logoUnacar from '../assets/logo-unacar.png';
 import logoFci from '../assets/logo-fci.png';
 
-const inputClass =
-  'h-11 w-full rounded-lg bg-surface-container-low px-space-sm text-on-surface text-body-md focus:bg-surface-container-lowest focus:outline-none focus:ring-2 focus:ring-secondary';
-
 /**
- * Pantalla de inicio de sesión. Las cuentas las da de alta un
- * administrador (ver api/src/auth.js); por eso no hay "crear cuenta" ni
- * "olvidé mi contraseña": ambas cosas se piden a quien administra el sistema.
+ * Pantalla de inicio de sesión. Solo entran los correos que el
+ * administrador dio de alta (ver api/src/autorizados.js); cada persona crea
+ * su contraseña, o la cambia si la olvidó, con un código que le llega al
+ * correo (CrearPasswordForm). No hay "crear cuenta" abierto a cualquiera.
  */
-export default function LoginView({ onLogin, error: errorInicial, configurada, activada }) {
+export default function LoginView({
+  onLogin,
+  onPedirCodigo,
+  onCrearPassword,
+  error: errorInicial,
+  configurada,
+  activada,
+}) {
+  const [modo, setModo] = useState('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [verPassword, setVerPassword] = useState(false);
   const [enviando, setEnviando] = useState(false);
   const [error, setError] = useState(errorInicial);
 
@@ -61,62 +68,74 @@ export default function LoginView({ onLogin, error: errorInicial, configurada, a
           </p>
         )}
 
-        <form className="flex flex-col gap-space-md" onSubmit={handleSubmit}>
-          <label className="flex flex-col gap-space-2xs">
-            <span className="font-bold text-label-md">Correo institucional</span>
-            <input
-              type="email"
-              autoComplete="username"
-              required
-              autoFocus
-              className={inputClass}
-              placeholder="nombre@delfin.unacar.mx"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-            />
-          </label>
+        {modo === 'crear' ? (
+          <CrearPasswordForm
+            emailInicial={email}
+            onPedirCodigo={onPedirCodigo}
+            onCrearPassword={onCrearPassword}
+            onVolver={() => setModo('login')}
+          />
+        ) : (
+          <>
+            <form className="flex flex-col gap-space-md" onSubmit={handleSubmit}>
+              <label className="flex flex-col gap-space-2xs">
+                <span className="font-bold text-label-md">Correo institucional</span>
+                <input
+                  type="email"
+                  autoComplete="username"
+                  required
+                  autoFocus
+                  className={inputClass}
+                  placeholder="nombre@delfin.unacar.mx"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                />
+              </label>
 
-          <label className="flex flex-col gap-space-2xs">
-            <span className="font-bold text-label-md">Contraseña</span>
-            <div className="relative">
-              <input
-                type={verPassword ? 'text' : 'password'}
-                autoComplete="current-password"
-                required
-                className={`${inputClass} pr-11`}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-              />
+              <label className="flex flex-col gap-space-2xs">
+                <span className="font-bold text-label-md">Contraseña</span>
+                <PasswordInput value={password} onChange={setPassword} />
+              </label>
+
+              {error && (
+                <p role="alert" className="flex items-start gap-space-2xs text-error text-label-md">
+                  <Icon name="error" className="mt-0.5 text-[16px]" />
+                  {error}
+                </p>
+              )}
+
               <button
-                type="button"
-                onClick={() => setVerPassword((v) => !v)}
-                aria-label={verPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
-                className="absolute inset-y-0 right-0 flex w-11 items-center justify-center text-outline hover:text-secondary"
+                type="submit"
+                disabled={enviando || !configurada}
+                className="flex h-11 items-center justify-center gap-space-xs rounded-lg bg-primary font-bold text-on-primary shadow-md transition-all hover:bg-primary-container disabled:cursor-not-allowed disabled:opacity-40"
               >
-                <Icon name={verPassword ? 'visibility_off' : 'visibility'} className="text-[20px]" />
+                <Icon name="login" className="text-[18px]" />
+                {enviando ? 'Entrando…' : 'Iniciar sesión'}
               </button>
-            </div>
-          </label>
+            </form>
 
-          {error && (
-            <p role="alert" className="flex items-start gap-space-2xs text-error text-label-md">
-              <Icon name="error" className="mt-0.5 text-[16px]" />
-              {error}
-            </p>
-          )}
-
-          <button
-            type="submit"
-            disabled={enviando || !configurada}
-            className="flex h-11 items-center justify-center gap-space-xs rounded-lg bg-primary font-bold text-on-primary shadow-md transition-all hover:bg-primary-container disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            <Icon name="login" className="text-[18px]" />
-            {enviando ? 'Entrando…' : 'Iniciar sesión'}
-          </button>
-        </form>
+            {/* Sin la API activada no hay a dónde mandar el código. */}
+            {activada && configurada && (
+              <div className="flex flex-col items-center gap-space-2xs text-center text-label-sm">
+                <span className="text-on-surface-variant">¿Es tu primera vez o olvidaste tu contraseña?</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setError(null);
+                    setModo('crear');
+                  }}
+                  className="font-bold text-secondary hover:underline"
+                >
+                  Crear o cambiar mi contraseña
+                </button>
+              </div>
+            )}
+          </>
+        )}
 
         <p className="text-center text-outline text-label-sm">
-          ¿No tienes cuenta u olvidaste tu contraseña? Pídela a quien administra el sistema.
+          Solo pueden entrar los correos registrados. Si el tuyo no lo está, pídeselo a quien administra el
+          sistema.
         </p>
       </div>
     </div>

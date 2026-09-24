@@ -5,7 +5,7 @@ import { useAuth, AUTH } from './hooks/useAuth';
 
 /** Muestra la pantalla de login hasta que haya sesión; después, la aplicación. */
 export default function Root() {
-  const { status, user, error, configurada, activada, login, logout } = useAuth();
+  const { status, user, error, configurada, activada, login, pedirCodigo, crearPassword, logout } = useAuth();
 
   if (status === AUTH.CHECKING) {
     return (
@@ -17,7 +17,16 @@ export default function Root() {
   }
 
   if (status === AUTH.ANON) {
-    return <LoginView onLogin={login} error={error} configurada={configurada} activada={activada} />;
+    return (
+      <LoginView
+        onLogin={login}
+        onPedirCodigo={pedirCodigo}
+        onCrearPassword={crearPassword}
+        error={error}
+        configurada={configurada}
+        activada={activada}
+      />
+    );
   }
 
   return <App user={user} onLogout={logout} />;

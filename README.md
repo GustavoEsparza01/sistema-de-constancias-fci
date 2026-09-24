@@ -79,24 +79,92 @@ Navegador --POST /auth/login--> API --signInWithPassword--> Supabase Auth
 Navegador --Authorization: Bearer <token>--> API (requireAuth valida el token)
 ```
 
-| Endpoint             | Qué hace                                                                   |
-| -------------------- | -------------------------------------------------------------------------- |
-| `POST /auth/login`   | correo + contraseña → tokens. Máx. 10 intentos fallidos por IP cada 15 min |
-| `POST /auth/refresh` | renueva el access token (el frontend lo hace 1 min antes de que expire)    |
-| `GET /auth/me`       | usuario de la sesión actual                                                |
-| `POST /auth/logout`  | revoca la sesión en Supabase                                               |
+| Endpoint                    | Qué hace                                                                   |
+| --------------------------- | -------------------------------------------------------------------------- |
+| `POST /auth/login`          | correo + contraseña → tokens. Máx. 10 intentos fallidos por IP cada 15 min |
+| `POST /auth/codigo`         | manda un código al correo, si está autorizado. Máx. 5 por IP cada 15 min   |
+| `POST /auth/crear-password` | correo + código + contraseña nueva → la guarda y devuelve tokens           |
+| `POST /auth/refresh`        | renueva el access token (el frontend lo hace 1 min antes de que expire)    |
+| `GET /auth/me`              | usuario de la sesión actual                                                |
+| `POST /auth/logout`         | revoca la sesión en Supabase                                               |
 
-- **Alta de usuarios:** no hay registro público. Un administrador crea las
-  cuentas en el panel de Supabase (Authentication → Users → Add user →
-  "Create new user", con "Auto Confirm User" marcado). Conviene desactivar
-  el registro abierto en Authentication → Sign In / Providers → "Allow new
-  users to sign up".
 - **La sesión vive en `sessionStorage`**: se cierra sola al cerrar el
   navegador, pensando en equipos compartidos de la Secretaría.
 - **Con el login activado pero sin `VITE_API_URL`** no se puede entrar: la
   pantalla de login avisa que falta configurar el servidor.
 - **Endpoints nuevos:** todo endpoint con datos de alumnos debe usar el
   middleware `requireAuth` de `api/src/auth.js`.
+
+### Alta de usuarios: correos autorizados
+
+No hay registro abierto. El administrador da de alta el **correo** de cada
+persona y ella misma crea su contraseña:
+
+1. El administrador agrega el correo a la tabla `usuarios_autorizados`
+   (`supabase/migrations/20260924000000_usuarios_autorizados.sql`), desde el
+   SQL Editor de Supabase:
+
+   ```sql
+   insert into public.usuarios_autorizados (email, nombre)
+   values ('nombre@delfin.unacar.mx', 'Nombre Apellido');
+   ```
+
+2. La persona abre el sistema, entra en **"Crear o cambiar mi contraseña"**
+   y escribe su correo. Le llega un código a su bandeja de Outlook.
+3. Escribe el código y su contraseña nueva (mínimo 8 caracteres) y queda
+   dentro del sistema. De ahí en adelante entra con correo y contraseña.
+
+```
+Navegador --POST /auth/codigo--> API: ¿está en usuarios_autorizados?
+                                   sí → crea la cuenta (si no existía) y
+                                        Supabase manda el código al correo
+Navegador --POST /auth/crear-password (código + contraseña)--> API
+   API: verifica el código con Supabase, guarda la contraseña
+        <-- access + refresh token (sesión iniciada)
+```
+
+- **El código prueba que el correo es suyo.** Aunque alguien sepa qué
+  correos están autorizados, sin acceso a esa bandeja no puede crear la
+  contraseña.
+- **"Olvidé mi contraseña"** es el mismo camino: pide un código nuevo y
+  elige otra contraseña. Al cambiarla se cierran sus sesiones en otros
+  equipos.
+- **Correos no autorizados:** la API responde lo mismo que a uno autorizado
+  ("si tu correo está registrado, te llegará un código"), pero no manda
+  nada. Así no se puede averiguar quién tiene acceso.
+- **Quitar el acceso:** `update public.usuarios_autorizados set activo =
+false where email = '...';`. La lista se revisa al entrar y en cada
+  petición protegida, así que surte efecto de inmediato, aunque la persona
+  tenga una sesión abierta.
+- La cuenta de Supabase se crea desde la API la primera vez que la persona
+  pide su código, así que el registro público de Supabase puede (y debe)
+  quedar **apagado**: Authentication → Sign In / Providers → "Allow new
+  users to sign up".
+
+**Configuración en Supabase para que lleguen los códigos (una sola vez):**
+
+1. **SMTP propio** (Authentication → Emails → SMTP Settings). El servidor
+   de correo que trae Supabase de fábrica solo manda a los miembros del
+   equipo del proyecto y con un límite muy bajo por hora; no sirve para
+   usuarios reales. Opciones: un servicio como Resend, Brevo o SendGrid
+   (tienen plan gratis) o una cuenta de correo de la Facultad por SMTP.
+2. **Plantilla del correo** (Authentication → Emails → Templates → **Magic
+   Link**): tiene que incluir `{{ .Token }}`, que es el código. Por
+   ejemplo:
+
+   ```html
+   <h2>Sistema de Constancias FCI</h2>
+   <p>Tu código para crear o cambiar tu contraseña es:</p>
+   <p style="font-size:24px;font-weight:bold;letter-spacing:4px">{{ .Token }}</p>
+   <p>Vence en una hora. Si no lo pediste, ignora este correo.</p>
+   ```
+
+   Sin `{{ .Token }}` el correo llega con un enlace en vez del código y el
+   formulario no sirve.
+
+3. Como los correos de la institución son de Outlook, conviene hacer una
+   prueba y revisar que no caigan en "Correo no deseado". Con un SMTP bien
+   configurado (dominio verificado, SPF/DKIM) es raro que pase.
 
 ### Seguridad: lo que falta antes de producción con datos reales
 
@@ -213,6 +281,7 @@ frontend/src/
 │   └── logo-fci.png          # logo de la FCI (recortado de una captura, ver nota abajo)
 ├── components/
 │   ├── atoms/                 # VarField.jsx (ámbar = dato vacío), Icon.jsx (Material Symbols)
+│   ├── auth/                  # PasswordInput.jsx, CrearPasswordForm.jsx (código por correo → contraseña)
 │   ├── form/                 # Field, inputs.jsx, FormPanel.jsx (dirigido por data/formFields.js), CalendarioPicker.jsx
 │   ├── document/             # DocumentShell (membrete con logos) + Runs + PreviewNormal + PreviewPromedio + PreviewDocument
 │   ├── history/               # HistorialTable.jsx, DocumentModal.jsx (con descarga real de PDF)
@@ -223,7 +292,7 @@ frontend/src/
     ├── InicioView.jsx             # panel de métricas (total, por tipo, últimas constancias)
     ├── NuevaConstanciaView.jsx
     ├── CalendarioView.jsx         # PDF oficial del calendario + fechas de cada semestre
-    ├── LoginView.jsx              # inicio de sesión (correo + contraseña)
+    ├── LoginView.jsx              # inicio de sesión (correo + contraseña) y "crear o cambiar mi contraseña"
     └── HistorialView.jsx          # + exportar/importar respaldo
 ```
 
@@ -330,9 +399,10 @@ el panel de cada servicio.
 
 ### `frontend/` (se capturan en Vercel)
 
-| Variable       | Para qué sirve                      | Ejemplo                                    |
-| -------------- | ----------------------------------- | ------------------------------------------ |
-| `VITE_API_URL` | URL base de la API, sin barra final | `https://constancias-fci-api.onrender.com` |
+| Variable            | Para qué sirve                      | Ejemplo                                    |
+| ------------------- | ----------------------------------- | ------------------------------------------ |
+| `VITE_API_URL`      | URL base de la API, sin barra final | `https://constancias-fci-api.onrender.com` |
+| `VITE_AUTH_ENABLED` | Validar el login contra la API      | `true`                                     |
 
 Todo lo que empieza con `VITE_` queda **incrustado en el bundle y es
 público**. Por eso aquí no va ninguna llave de Supabase.
